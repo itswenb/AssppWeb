@@ -136,6 +136,28 @@ describe('Apple 认证异常响应恢复', () => {
     expect(vi.mocked(appleRequest).mock.calls[6][0].body).toBe(verification.body);
   });
 
+  it('最终响应省略路由头时，保留重定向中的 pod 和完整 storefront', async () => {
+    vi.mocked(appleRequest)
+      .mockResolvedValueOnce(response(302, '', {
+        location: 'https://p56-buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
+        pod: '56',
+        'x-set-apple-store-front': '143465-19,32',
+      }))
+      .mockResolvedValueOnce(response(200, successBody));
+    await expect(login()).resolves.toMatchObject({
+      pod: '56', store: '143465', storefront: '143465-19,32',
+    });
+  });
+
+  it('认证 pod 主机未返回 pod 头时，从实际认证主机恢复购买路由', async () => {
+    vi.mocked(appleRequest)
+      .mockResolvedValueOnce(response(302, '', {
+        location: 'https://p56-buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
+      }))
+      .mockResolvedValueOnce(response(200, successBody));
+    await expect(login()).resolves.toMatchObject({ pod: '56' });
+  });
+
   it('收到有效 2FA 挑战后立即交给用户输入验证码', async () => {
     vi.mocked(appleRequest).mockResolvedValue(response(200, challengeBody));
     await expect(login()).rejects.toMatchObject({ codeRequired: true });

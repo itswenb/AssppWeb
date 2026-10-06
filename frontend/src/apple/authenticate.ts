@@ -41,6 +41,8 @@ export async function authenticate(
 ): Promise<Account> {
   let cookies: Cookie[] = existingCookies ? [...existingCookies] : [];
   let storeFront = '';
+  let storefront: string | undefined;
+  let pod: string | undefined;
 
   const bag = await fetchBag(deviceId);
   const authEndpoint = new URL(normalizeAuthURL(bag.authURL));
@@ -93,8 +95,11 @@ export async function authenticate(
       const parts = storeHeader.split('-');
       if (parts[0]) {
         storeFront = parts[0];
+        storefront = storeHeader;
       }
     }
+    // Apple 可能只在重定向中返回 pod；最终响应没有该头时保留路由。
+    pod = response.headers['pod'] || requestHost.match(/^p(\d+)-buy\.itunes\.apple\.com$/)?.[1] || pod;
 
     // 诊断仅包含域名、路径和状态，不记录请求体、查询参数或 Cookie。
     const endpoint = `${requestHost}${requestPath.split('?')[0]}`;
@@ -180,13 +185,14 @@ export async function authenticate(
       password,
       appleId: (accountInfo.appleId as string) ?? '',
       store: storeFront,
+      storefront,
       firstName: (address.firstName as string) ?? '',
       lastName: (address.lastName as string) ?? '',
       passwordToken: (dict.passwordToken as string) ?? '',
       directoryServicesIdentifier: String(dict.dsPersonId ?? ''),
       cookies,
       deviceIdentifier: deviceId,
-      pod: response.headers['pod'] || undefined,
+      pod,
     };
   }
 }

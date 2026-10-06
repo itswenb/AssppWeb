@@ -158,6 +158,8 @@ After authentication, Apple returns a `pod` header:
 - Store API: `p{pod}-buy.itunes.apple.com` (default: `p25-buy.itunes.apple.com`)
 - Purchase API: `p{pod}-buy.itunes.apple.com` (default: `buy.itunes.apple.com`)
 - Pod is stored on the Account object and used for all subsequent API calls
+- 认证重定向中的 `pod` 必须保留；若最终响应省略该头，从实际 `p{pod}-buy` 认证主机恢复路由。
+- `Account.store` 保存地区编号；可选 `Account.storefront` 保存 Apple 原样返回的完整请求头，购买时优先使用。旧账户没有完整值时兼容 `${store}-1`。
 - Functions: `storeAPIHost(pod?)` and `purchaseAPIHost(pod?)` in `frontend/src/apple/config.ts`
 
 ## Dynamic Host Validation (Backend)
@@ -276,6 +278,8 @@ The settings endpoint (`/api/settings`) must never reflect request headers (`x-f
 ### Apple Protocol Error Codes
 
 - `2034` / `2042`: Token expired — re-authentication required
+- `1008`: 设备验证失败，购买时按需要重新认证处理。仅在明确的认证错误后续期一次；不在每次购买前重新登录，也不吞掉 2FA 错误。
+- `5002`: 已拥有许可证（Apple 可能同时返回“An unknown error has occurred”）；获取许可证操作用 `getDownloadInfo` 确认可下载后才显示成功。普通 HTTP 500 不视作已拥有许可证。
 - `customerMessage === 'Your password has changed.'`: Password token invalid
 - `action.url` ending in `termsPage`: Terms acceptance required (throw with URL)
 

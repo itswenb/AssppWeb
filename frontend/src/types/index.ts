@@ -34,6 +34,8 @@ export interface Account {
   password: string;
   appleId: string;
   store: string;
+  // Apple 返回的完整商店请求头；store 仍用于地区匹配。
+  storefront?: string;
   firstName: string;
   lastName: string;
   passwordToken: string;
