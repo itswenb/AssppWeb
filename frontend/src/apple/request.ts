@@ -1,7 +1,7 @@
-import { libcurl, initLibcurl } from "./libcurl-init";
-import { buildCookieHeader } from "./cookies";
-import { userAgent } from "./config";
-import type { Cookie } from "../types";
+import { libcurl, initLibcurl } from './libcurl-init';
+import { buildCookieHeader } from './cookies';
+import { userAgent } from './config';
+import type { Cookie } from '../types';
 
 export interface AppleRequestOptions {
   host: string;
@@ -10,6 +10,7 @@ export interface AppleRequestOptions {
   headers?: Record<string, string>;
   body?: string;
   cookies?: Cookie[];
+  freshConnection?: boolean;
 }
 
 export interface AppleResponse {
@@ -27,37 +28,44 @@ export async function appleRequest(
 
   const url = `https://${opts.host}${opts.path}`;
   const headers: Record<string, string> = {
-    "User-Agent": userAgent,
+    'User-Agent': userAgent,
     ...opts.headers,
   };
 
   if (opts.cookies?.length) {
     const cookieHeader = buildCookieHeader(opts.cookies, url);
     if (cookieHeader) {
-      headers["Cookie"] = cookieHeader;
+      headers['Cookie'] = cookieHeader;
     }
   }
 
-  const resp = await libcurl.fetch(url, {
-    method: opts.method,
-    headers,
-    body: opts.body,
-    redirect: "manual",
-    _libcurl_http_version: 1.1,
-  });
+  // 认证使用独立连接池；Cookie 仍由调用方保留，TLS 仍在浏览器终止。
+  const session = opts.freshConnection ? new libcurl.HTTPSession() : null;
+  try {
+    const client = session ?? libcurl;
+    const resp = await client.fetch(url, {
+      method: opts.method,
+      headers,
+      body: opts.body,
+      redirect: 'manual',
+      _libcurl_http_version: 1.1,
+    });
 
-  const responseHeaders: Record<string, string> = {};
-  for (const [key, value] of resp.raw_headers) {
-    responseHeaders[key.toLowerCase()] = value;
+    const responseHeaders: Record<string, string> = {};
+    for (const [key, value] of resp.raw_headers) {
+      responseHeaders[key.toLowerCase()] = value;
+    }
+
+    const body = await resp.text();
+
+    return {
+      status: resp.status,
+      statusText: resp.statusText,
+      headers: responseHeaders,
+      rawHeaders: resp.raw_headers,
+      body,
+    };
+  } finally {
+    session?.close();
   }
-
-  const body = await resp.text();
-
-  return {
-    status: resp.status,
-    statusText: resp.statusText,
-    headers: responseHeaders,
-    rawHeaders: resp.raw_headers,
-    body,
-  };
 }

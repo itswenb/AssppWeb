@@ -120,7 +120,7 @@ The Dockerfile prebakes the stripped SAP assets at build time (a `sap-assets` st
 - Bag missing the SAP keys → signing is skipped (graceful degradation to the legacy flow)
 - SAP session lifetime = the page session: the signer is a singleton per deviceIdentifier, reused across sign-in attempts (2FA retries included); switching accounts rebuilds it. Initialization ≈ 150–300 ms of emulation plus the setup exchange round-trips
 - First login downloads ~14 MB over the wire (22.5 MB stripped assets, gzipped); a background warmup and inline progress line cover it. Release images prebake the assets, so the backend serves them instantly
-- The live bag currently returns the legacy `MZFinance` authenticate endpoint (see upstream PR discussion); `normalizeAuthURL` is effectively inert, and all three advertised endpoints sit in the SAP-signed list — signing applies regardless
+- Bag 可能返回旧版 `MZFinance` authenticate 端点；初始认证 URL 和 pod 重定向都通过 `normalizeAuthURL` 补齐 `/authenticate/` 的尾部斜杠，避免裸路径返回无 `Location` 的 HTTP 301。原生端点仍规范化为 `/fast/`，主机和查询参数保持不变；SAP 签名覆盖所有认证请求。
 
 ## Reference Implementation
 
@@ -169,6 +169,8 @@ The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/
 - `init.itunes.apple.com` — bag endpoint
 - `/^p\d+-buy\.itunes\.apple\.com$/` — pod-based hosts
 - `downloaddispatch.itunes.apple.com` — redownload dispatch endpoint (failureType 5002 fallback)
+- `s.mzstatic.com` — SAP public setup certificate
+- `fpinit.itunes.apple.com` — SAP public key exchange
 - Port restricted to `443` only
 - Direct IP targets blocked (`allow_direct_ip = false`)
 - Loopback IP targets blocked (`allow_loopback_ips = false`)
@@ -202,6 +204,7 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 - `appleRequest()` in `frontend/src/apple/request.ts` wraps `libcurl.fetch` for all Apple API calls and forces HTTP/1.1 (`_libcurl_http_version: 1.1`)
 - Bag endpoint (`frontend/src/apple/bag.ts`) uses backend proxy (`/api/bag`) and falls back to `https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate` when `authenticateAccount` is missing or bag fetch fails
 - Authentication (`frontend/src/apple/authenticate.ts`) resolves bag endpoint, then sets `guid` via URL query manipulation to avoid duplicate/malformed query parameters
+- 认证请求使用独立 libcurl HTTP 会话，并在读完响应后关闭；Cookie 和 SAP 会话由浏览器继续保留。空或非 plist 的 HTTP 204/404/429/5xx 每个端点最多请求 3 次，默认等待 10/20 秒；遵守 `Retry-After`，单次等待超过 30 秒时停止自动重试。有效 Apple 错误和 2FA 提示不自动重试。
 - Plist build/parse (`frontend/src/apple/plist.ts`) uses native XML builder and browser-native `DOMParser`
 - Cookie helper (`frontend/src/apple/cookies.ts`) — `extractAndMergeCookies(rawHeaders, existingCookies)` replaces the repeated extract-and-merge pattern across all Apple protocol files
 

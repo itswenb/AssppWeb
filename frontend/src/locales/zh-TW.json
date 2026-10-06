@@ -454,6 +454,9 @@
       "requiresVerification": "驗證需要雙重認證代碼。如果沒有彈出驗證碼，請嘗試在 https://account.apple.com 登入以觸發提示，然後在雙重認證代碼欄位中填寫該代碼。",
       "redirectLocation": "無法取得重新導向位址",
       "emptyBody": "認證失敗：伺服器傳回 HTTP {{status}} 且回應主體為空",
+      "unexpectedResponse": "Apple 未傳回有效認證結果（HTTP {{statuses}}；{{endpoint}}）。請稍後重試，或檢查、切換伺服器的出口網路。",
+      "retryLater": "Apple 要求等待超過 30 秒（HTTP {{status}}；{{endpoint}}）。已停止自動重試，請稍後再試。",
+      "tooManyRedirects": "認證重新導向次數過多",
       "missingAccountInfo": "回應中缺少 accountInfo",
       "missingAddress": "回應中缺少 address",
       "unknownReason": "未知原因導致認證失敗"

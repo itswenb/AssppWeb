@@ -2,13 +2,15 @@ import { Server as HttpServer } from "http";
 import { server as wisp } from "@mercuryworkshop/wisp-js/server";
 import { accessPasswordHash, verifyAccessToken } from "../config.js";
 
-// Allow only Apple hosts required by bag/auth/purchase/version/download flows.
+// 仅允许 Apple 协议和 SAP 证书、密钥交换需要的域名。
 wisp.options.hostname_whitelist = [
   /^auth\.itunes\.apple\.com$/,
   /^buy\.itunes\.apple\.com$/,
   /^init\.itunes\.apple\.com$/,
   /^p\d+-buy\.itunes\.apple\.com$/,
   /^downloaddispatch\.itunes\.apple\.com$/,
+  /^s\.mzstatic\.com$/,
+  /^fpinit\.itunes\.apple\.com$/,
 ];
 wisp.options.port_whitelist = [443];
 wisp.options.allow_direct_ip = false;

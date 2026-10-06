@@ -12,10 +12,10 @@ export const defaultAuthURL =
   "https://auth.itunes.apple.com/auth/v1/native/fast/";
 
 const NATIVE_AUTH_HOST = "auth.itunes.apple.com";
+const LEGACY_AUTH_PATH = '/WebObjects/MZFinance.woa/wa/authenticate';
 
-// The bag advertises the native auth endpoint without the /fast/ sub-path that
-// the login flow requires; the no-trailing-slash variant 301s to an HTML page.
-// Legacy endpoints on other hosts pass through unchanged.
+// 原生端点需要 /fast/；旧版端点也需要尾部斜杠，裸路径可能返回没有
+// Location 的 301。仅规范化已知认证路径，保留 Apple 给出的主机和查询参数。
 export function normalizeAuthURL(rawURL: string): string {
   let url: URL;
   try {
@@ -24,6 +24,12 @@ export function normalizeAuthURL(rawURL: string): string {
     return rawURL;
   }
   if (url.hostname !== NATIVE_AUTH_HOST) {
+    const legacyHost = url.hostname === 'buy.itunes.apple.com' ||
+      /^p\d+-buy\.itunes\.apple\.com$/.test(url.hostname);
+    if (legacyHost && url.pathname.replace(/\/+$/, '') === LEGACY_AUTH_PATH) {
+      url.pathname = `${LEGACY_AUTH_PATH}/`;
+      return url.toString();
+    }
     return rawURL;
   }
   let path = url.pathname.replace(/\/+$/, "");

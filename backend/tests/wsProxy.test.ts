@@ -3,6 +3,7 @@ import { createServer, Server } from "http";
 import net from "net";
 import { WebSocket } from "ws";
 import express from "express";
+import { server as wisp } from '@mercuryworkshop/wisp-js/server';
 import { setupWsProxy } from "../src/services/wsProxy.js";
 
 let httpServer: Server | null = null;
@@ -33,6 +34,26 @@ async function stopServer() {
 describe("Wisp Proxy", () => {
   afterEach(async () => {
     await stopServer();
+  });
+
+  it('允许 SAP 公共端点并拒绝相似域名，保留端口和 IP 限制', () => {
+    const allowed = (host: string) => wisp.options.hostname_whitelist.some(
+      (pattern: RegExp | string) => typeof pattern === 'string'
+        ? pattern === host : pattern.test(host),
+    );
+    for (const host of ['s.mzstatic.com', 'fpinit.itunes.apple.com', 'p25-buy.itunes.apple.com']) {
+      expect(allowed(host)).toBe(true);
+    }
+    for (const host of [
+      'mzstatic.com', 'sub.s.mzstatic.com', 's.mzstatic.com.evil.example',
+      'fpinit.itunes.apple.com.evil.example', 'evilfpinit.itunes.apple.com',
+      'example.com', '127.0.0.1',
+    ]) {
+      expect(allowed(host)).toBe(false);
+    }
+    expect(wisp.options.port_whitelist).toEqual([443]);
+    expect(wisp.options.allow_direct_ip).toBe(false);
+    expect(wisp.options.allow_loopback_ips).toBe(false);
   });
 
   it("should accept WebSocket connections on /wisp/ path", async () => {

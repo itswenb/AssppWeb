@@ -26,6 +26,10 @@ declare module "libcurl.js" {
     set_websocket(url: string): void;
     load_wasm(url?: string): Promise<void>;
     fetch(url: string, options?: LibcurlFetchOptions): Promise<LibcurlResponse>;
+    HTTPSession: new () => {
+      fetch(url: string, options?: LibcurlFetchOptions): Promise<LibcurlResponse>;
+      close(): void;
+    };
     get_error_string(code: number): string;
     get_cacert(): string;
     version: string;
