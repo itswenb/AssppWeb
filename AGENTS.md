@@ -171,6 +171,7 @@ The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/
 - `init.itunes.apple.com` — bag endpoint
 - `/^p\d+-buy\.itunes\.apple\.com$/` — pod-based hosts
 - `downloaddispatch.itunes.apple.com` — redownload dispatch endpoint (failureType 5002 fallback)
+- `uclient-api.itunes.apple.com` — 公开 iOS 版本目录；按所选账号的地区查询，不携带账号凭据
 - `s.mzstatic.com` — SAP public setup certificate
 - `fpinit.itunes.apple.com` — SAP public key exchange
 - Port restricted to `443` only
@@ -280,6 +281,7 @@ The settings endpoint (`/api/settings`) must never reflect request headers (`x-f
 - `2034` / `2042`: Token expired — re-authentication required
 - `1008`: 设备验证失败，购买时按需要重新认证处理。仅在明确的认证错误后续期一次；不在每次购买前重新登录，也不吞掉 2FA 错误。
 - `5002`: 已拥有许可证（Apple 可能同时返回“An unknown error has occurred”）；获取许可证操作用 `getDownloadInfo` 确认可下载后才显示成功。普通 HTTP 500 不视作已拥有许可证。
+- 下载端点还会返回 HTTP 200 且 `songList` 为空；与 5002 一样切换一次重下载。没有指定历史版本时，通过所选账号地区的公开目录固定当前 iOS 版本；企业目录为空时依次查询同地区 iPhone/iPad 目录，不跨区回退。
 - `customerMessage === 'Your password has changed.'`: Password token invalid
 - `action.url` ending in `termsPage`: Terms acceptance required (throw with URL)
 

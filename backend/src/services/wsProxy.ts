@@ -9,6 +9,7 @@ wisp.options.hostname_whitelist = [
   /^init\.itunes\.apple\.com$/,
   /^p\d+-buy\.itunes\.apple\.com$/,
   /^downloaddispatch\.itunes\.apple\.com$/,
+  /^uclient-api\.itunes\.apple\.com$/,
   /^s\.mzstatic\.com$/,
   /^fpinit\.itunes\.apple\.com$/,
 ];

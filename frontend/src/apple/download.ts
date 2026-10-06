@@ -1,13 +1,14 @@
-import type { Account, Software, DownloadOutput, Sinf } from "../types";
-import { appleRequest } from "./request";
-import { buildPlist, parsePlist } from "./plist";
-import { extractAndMergeCookies } from "./cookies";
+import i18n from '../i18n';
+import { appleRequest } from './request';
+import { buildPlist, parsePlist } from './plist';
+import { extractAndMergeCookies } from './cookies';
+import { getLatestVersionId } from './latestVersion';
 import {
   RETRYABLE_FAILURE_TYPE,
   redownloadEndpoint,
   volumeStoreEndpoint,
-} from "./config";
-import i18n from "../i18n";
+} from './config';
+import type { Account, Software, DownloadOutput, Sinf } from '../types';
 
 export class DownloadError extends Error {
   constructor(
@@ -15,7 +16,7 @@ export class DownloadError extends Error {
     public readonly code?: string,
   ) {
     super(message);
-    this.name = "DownloadError";
+    this.name = 'DownloadError';
   }
 }
 
@@ -35,9 +36,10 @@ export async function getDownloadInfo(
 
   while (redirectAttempt <= 3) {
     const payload: Record<string, any> = {
-      creditDisplay: "",
+      creditDisplay: '',
       guid: deviceId,
       salableAdamId: app.id,
+      serialNumber: '0',
     };
 
     if (externalVersionId) {
@@ -47,13 +49,13 @@ export async function getDownloadInfo(
     const plistBody = buildPlist(payload);
 
     const headers: Record<string, string> = {
-      "Content-Type": "application/x-apple-plist",
-      "iCloud-DSID": account.directoryServicesIdentifier,
-      "X-Dsid": account.directoryServicesIdentifier,
+      'Content-Type': 'application/x-apple-plist',
+      'iCloud-DSID': account.directoryServicesIdentifier,
+      'X-Dsid': account.directoryServicesIdentifier,
     };
 
     const response = await appleRequest({
-      method: "POST",
+      method: 'POST',
       host: requestHost,
       path: requestPath,
       headers,
@@ -64,9 +66,9 @@ export async function getDownloadInfo(
     cookies = extractAndMergeCookies(response.rawHeaders, cookies);
 
     if (response.status === 302) {
-      const location = response.headers["location"];
+      const location = response.headers['location'];
       if (!location) {
-        throw new DownloadError(i18n.t("errors.download.redirectLocation"));
+        throw new DownloadError(i18n.t('errors.download.redirectLocation'));
       }
       const url = new URL(location);
       requestHost = url.hostname;
@@ -75,72 +77,90 @@ export async function getDownloadInfo(
       continue;
     }
 
-    const dict = parsePlist(response.body) as Record<string, any>;
+    const responseError = (message: string) => new DownloadError(
+      `${message} (HTTP ${response.status}; ${requestHost}${requestPath.split('?')[0]})`,
+    );
+    if (response.status !== 200) {
+      throw responseError(i18n.t('errors.download.downloadFailed', { failureType: response.status }));
+    }
+    let dict: Record<string, any>;
+    try {
+      dict = parsePlist(response.body) as Record<string, any>;
+    } catch {
+      throw responseError(i18n.t('errors.download.noItems'));
+    }
+    if (!dict || typeof dict !== 'object' || Array.isArray(dict)) {
+      throw responseError(i18n.t('errors.download.noItems'));
+    }
+    const songList = dict.songList as Record<string, any>[] | undefined;
+    const failureType = dict.failureType ? String(dict.failureType) : '';
+    const customerMessage = String(dict.customerMessage ?? '').trim();
+    const empty = !songList || songList.length === 0;
+    const unavailable = customerMessage.toLowerCase() === 'no longer available' ||
+      customerMessage.toLowerCase().endsWith(' no longer available');
+
+    // Apple 会静默返回空 songList；与 5002 一样，仅切换一次重下载端点。
+    if (!triedRedownload && (failureType === RETRYABLE_FAILURE_TYPE ||
+      (!failureType && empty && (!customerMessage || unavailable)))) {
+      triedRedownload = true;
+      externalVersionId = externalVersionId || await getLatestVersionId(account.store, app);
+      endpoint = redownloadEndpoint(deviceId);
+      requestHost = endpoint.host;
+      requestPath = endpoint.path;
+      redirectAttempt = 0;
+      continue;
+    }
 
     if (dict.failureType) {
-      const failureType = String(dict.failureType);
-
-      // volumeStore intermittently returns 5002; retry once via the
-      // redownload dispatch endpoint, which serves the same payload.
-      if (failureType === RETRYABLE_FAILURE_TYPE && !triedRedownload) {
-        triedRedownload = true;
-        endpoint = redownloadEndpoint(deviceId);
-        requestHost = endpoint.host;
-        requestPath = endpoint.path;
-        redirectAttempt = 0;
-        continue;
-      }
-
       const customerMessage = dict.customerMessage as string | undefined;
       switch (failureType) {
-        case "2034":
-        case "2042":
+        case '2034':
+        case '2042':
           throw new DownloadError(
-            i18n.t("errors.download.passwordExpired"),
+            i18n.t('errors.download.passwordExpired'),
             failureType,
           );
-        case "9610":
+        case '9610':
           throw new DownloadError(
-            i18n.t("errors.download.licenseRequired"),
-            "9610",
+            i18n.t('errors.download.licenseRequired'),
+            '9610',
           );
         default: {
-          if (customerMessage === "Your password has changed.") {
+          if (customerMessage === 'Your password has changed.') {
             throw new DownloadError(
-              i18n.t("errors.download.passwordExpired"),
+              i18n.t('errors.download.passwordExpired'),
               failureType,
             );
           }
           // If apple provides a specific string, we fall back to it, otherwise we use the localized default.
           throw new DownloadError(
             customerMessage ??
-              i18n.t("errors.download.downloadFailed", { failureType }),
+              i18n.t('errors.download.downloadFailed', { failureType }),
             failureType,
           );
         }
       }
     }
 
-    const songList = dict.songList as Record<string, any>[] | undefined;
     if (!songList || songList.length === 0) {
-      throw new DownloadError(i18n.t("errors.download.noItems"));
+      throw responseError(customerMessage || i18n.t('errors.download.noItems'));
     }
 
     const item = songList[0];
     const url = item.URL as string;
     if (!url) {
-      throw new DownloadError(i18n.t("errors.download.missingUrl"));
+      throw new DownloadError(i18n.t('errors.download.missingUrl'));
     }
 
     const metadata = item.metadata as Record<string, any>;
     if (!metadata) {
-      throw new DownloadError(i18n.t("errors.download.missingMetadata"));
+      throw new DownloadError(i18n.t('errors.download.missingMetadata'));
     }
 
     const version = metadata.bundleShortVersionString as string;
     const bundleVersion = metadata.bundleVersion as string;
     if (!version || !bundleVersion) {
-      throw new DownloadError(i18n.t("errors.download.missingVersion"));
+      throw new DownloadError(i18n.t('errors.download.missingVersion'));
     }
 
     const sinfs: Sinf[] = [];
@@ -155,10 +175,10 @@ export async function getDownloadInfo(
             const bytes =
               sinf instanceof ArrayBuffer ? new Uint8Array(sinf) : sinf;
             sinfBase64 = base64FromBytes(bytes);
-          } else if (typeof sinf === "string") {
+          } else if (typeof sinf === 'string') {
             sinfBase64 = sinf;
           } else {
-            throw new DownloadError(i18n.t("errors.download.invalidSinf"));
+            throw new DownloadError(i18n.t('errors.download.invalidSinf'));
           }
           sinfs.push({ id, sinf: sinfBase64 });
         }
@@ -166,15 +186,15 @@ export async function getDownloadInfo(
     }
 
     if (sinfs.length === 0) {
-      throw new DownloadError(i18n.t("errors.download.noSinf"));
+      throw new DownloadError(i18n.t('errors.download.noSinf'));
     }
 
     // Build iTunesMetadata plist
     const metadataDict: Record<string, any> = { ...metadata };
-    metadataDict["apple-id"] = account.email;
-    metadataDict["userName"] = account.email;
+    metadataDict['apple-id'] = account.email;
+    metadataDict['userName'] = account.email;
     delete metadataDict.passwordToken;
-    delete metadataDict["passwordToken"];
+    delete metadataDict['passwordToken'];
     const iTunesMetadata = base64FromString(buildPlist(metadataDict));
 
     return {
@@ -189,7 +209,7 @@ export async function getDownloadInfo(
     };
   }
 
-  throw new DownloadError(i18n.t("errors.download.tooManyRedirects"));
+  throw new DownloadError(i18n.t('errors.download.tooManyRedirects'));
 }
 
 function base64FromString(value: string): string {
@@ -198,7 +218,7 @@ function base64FromString(value: string): string {
 }
 
 function base64FromBytes(bytes: Uint8Array): string {
-  let binary = "";
+  let binary = '';
   const chunkSize = 0x8000;
   for (let i = 0; i < bytes.length; i += chunkSize) {
     const chunk = bytes.subarray(i, i + chunkSize);

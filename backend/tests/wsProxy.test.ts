@@ -41,12 +41,14 @@ describe("Wisp Proxy", () => {
       (pattern: RegExp | string) => typeof pattern === 'string'
         ? pattern === host : pattern.test(host),
     );
-    for (const host of ['s.mzstatic.com', 'fpinit.itunes.apple.com', 'p25-buy.itunes.apple.com']) {
+    for (const host of ['s.mzstatic.com', 'fpinit.itunes.apple.com', 'p25-buy.itunes.apple.com',
+      'uclient-api.itunes.apple.com']) {
       expect(allowed(host)).toBe(true);
     }
     for (const host of [
       'mzstatic.com', 'sub.s.mzstatic.com', 's.mzstatic.com.evil.example',
       'fpinit.itunes.apple.com.evil.example', 'evilfpinit.itunes.apple.com',
+      'uclient-api.itunes.apple.com.evil.example', 'evil.uclient-api.itunes.apple.com',
       'example.com', '127.0.0.1',
     ]) {
       expect(allowed(host)).toBe(false);
