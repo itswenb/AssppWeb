@@ -182,6 +182,19 @@ export function redownloadEndpoint(deviceId: string): StoreDownloadEndpoint {
   };
 }
 
+export function updateEndpoint(deviceId: string, rawURL: string): StoreDownloadEndpoint {
+  const url = new URL(rawURL);
+  if (url.protocol !== 'https:' || url.host !== 'downloaddispatch.itunes.apple.com' ||
+    url.pathname !== '/up/updateProduct' || url.search || url.hash || url.username || url.password) {
+    throw new Error('Invalid update endpoint in Apple bag');
+  }
+  return {
+    host: url.hostname,
+    path: `${url.pathname}?guid=${encodeURIComponent(deviceId)}`,
+    externalVersionIdKey: 'appExtVrsId',
+  };
+}
+
 export function purchaseAPIHost(pod?: string): string {
   if (pod) return `p${pod}-buy.itunes.apple.com`;
   return "buy.itunes.apple.com";

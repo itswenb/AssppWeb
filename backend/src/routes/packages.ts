@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { MIN_ACCOUNT_HASH_LENGTH } from "../config.js";
 import { getAllTasks } from "../services/downloadManager.js";
 import { getIdParam } from "../utils/route.js";
+import { servePackageFile } from '../utils/servePackageFile.js';
 import type { PackageInfo } from "../types/index.js";
 
 const router = Router();
@@ -90,11 +91,7 @@ router.get("/packages/:id/file", (req: Request, res: Response) => {
   res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
   res.setHeader("Content-Type", "application/octet-stream");
 
-  const stats = fs.statSync(resolvedPath);
-  res.setHeader("Content-Length", stats.size);
-
-  const stream = fs.createReadStream(resolvedPath);
-  stream.pipe(res);
+  servePackageFile(res, resolvedPath);
 });
 
 // Delete a package (requires accountHash)

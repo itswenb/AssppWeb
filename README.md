@@ -77,6 +77,12 @@ docker compose up -d
 | `DOWNLOAD_THREADS`                          | `8`             | Number of parallel threads for IPA downloads (1–32)                                         |
 | `ACCESS_PASSWORD`                           | _(none)_        | Require a password to access the web UI and API (empty to disable)                          |
 
+**NAS 下载速度**
+
+`DOWNLOAD_THREADS` 控制 Apple CDN 到 NAS 的并发下载，可对比 `8`、`16`、`32`，选择实测速度更高且稳定的值。手机的 `itms-services` 安装使用 iOS 系统下载器；IPA 接口支持 Range/206 和续传，反向代理应保留 `Range`、`If-Range`、`Content-Range` 及 `Content-Length`。
+
+同一内网中，建议让路由器的本地 DNS 将访问域名解析为 NAS 的局域网地址，例如 `nas.example.com → 192.168.50.123`。继续使用原 HTTPS 域名与端口，证书和安装清单地址保持有效；公网 DNS 记录继续供外网访问。域名解析到公网 IP 时，路由器回流或上行链路可能影响速度，应对比局域网直连确认。
+
 **Reverse Proxy (Required for Install Apps on iOS)**
 
 iOS requires HTTPS for `itms-services://` install links. You must put AssppWeb behind a reverse proxy with a valid TLS certificate.

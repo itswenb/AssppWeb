@@ -170,7 +170,7 @@ The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/
 - `buy.itunes.apple.com` — purchase endpoint
 - `init.itunes.apple.com` — bag endpoint
 - `/^p\d+-buy\.itunes\.apple\.com$/` — pod-based hosts
-- `downloaddispatch.itunes.apple.com` — redownload dispatch endpoint (failureType 5002 fallback)
+- `downloaddispatch.itunes.apple.com` — 重下载接口；空 HTTP 500 或无错误码的不可用消息可再尝试 bag 提供的 `/up/updateProduct` 一次，保持地区、版本和 Cookie，校验响应应用与版本匹配。
 - `uclient-api.itunes.apple.com` — 公开 iOS 版本目录；按所选账号的地区查询，不携带账号凭据
 - `s.mzstatic.com` — SAP public setup certificate
 - `fpinit.itunes.apple.com` — SAP public key exchange
@@ -314,6 +314,8 @@ docker compose up -d   # Runs prebuilt image ghcr.io/lakr233/assppweb:latest on 
 ```
 
 `compose.yml` pulls the published image (no local build), mounts `./mnt/asspp-data:/data` for `DATA_DIR`, and supports `ACCESS_PASSWORD` / `DOWNLOAD_THREADS` env vars. The `Dockerfile` at the repo root is what CI builds and publishes that image.
+
+IPA 文件响应共用 `backend/src/utils/servePackageFile.ts`：使用 Express `sendFile` 处理 Range/206、HEAD、If-Range 和客户端中断；保留路由已有的路径与账号校验。`DOWNLOAD_THREADS` 只影响 Apple CDN → 服务器下载，iOS 的 `itms-services` 安装由系统下载器控制并发。内网访问应将同一 HTTPS 域名解析为 NAS 的局域网 IP，避免公网路径；证书和访问域名保持有效。
 
 Single container serves both the Express backend and the Vite-built React SPA. SPA routes are handled by serving `index.html` for all non-API paths.
 

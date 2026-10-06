@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { getAllTasks } from "../services/downloadManager.js";
 import { buildManifest, getWhitePng } from "../services/manifestBuilder.js";
 import { getIdParam } from "../utils/route.js";
+import { servePackageFile } from '../utils/servePackageFile.js';
 
 const router = Router();
 
@@ -120,11 +121,7 @@ router.get("/install/:id/payload.ipa", (req: Request, res: Response) => {
   }
 
   res.setHeader("Content-Type", "application/octet-stream");
-  const stats = fs.statSync(resolvedPath);
-  res.setHeader("Content-Length", stats.size);
-
-  const stream = fs.createReadStream(resolvedPath);
-  stream.pipe(res);
+  servePackageFile(res, resolvedPath);
 });
 
 // Small icon placeholder (57x57)

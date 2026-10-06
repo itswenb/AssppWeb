@@ -10,6 +10,7 @@ import {
   RETRYABLE_FAILURE_TYPE,
   volumeStoreEndpoint,
   redownloadEndpoint,
+  updateEndpoint,
 } from "../../src/apple/config";
 
 describe("apple/config", () => {
@@ -130,6 +131,19 @@ describe("apple/config", () => {
   });
 
   describe("store download endpoints", () => {
+    it('更新仅接受 Apple bag 的精确 HTTPS 路径', () => {
+      expect(updateEndpoint('aabbccddeeff', 'https://downloaddispatch.itunes.apple.com/up/updateProduct'))
+        .toEqual({ host: 'downloaddispatch.itunes.apple.com',
+          path: '/up/updateProduct?guid=aabbccddeeff', externalVersionIdKey: 'appExtVrsId' });
+      for (const url of [
+        'http://downloaddispatch.itunes.apple.com/up/updateProduct',
+        'https://evil.example/up/updateProduct',
+        'https://downloaddispatch.itunes.apple.com/up/updateProduct?x=1',
+        'https://user@downloaddispatch.itunes.apple.com/up/updateProduct',
+        'https://downloaddispatch.itunes.apple.com:8443/up/updateProduct',
+        'https://downloaddispatch.itunes.apple.com/r/redownload',
+      ]) expect(() => updateEndpoint('aabbccddeeff', url)).toThrow();
+    });
     it("volumeStore targets MZFinance with the externalVersionId key", () => {
       const ep = volumeStoreEndpoint("42", "aabbccddeeff");
       expect(ep.host).toBe("p42-buy.itunes.apple.com");

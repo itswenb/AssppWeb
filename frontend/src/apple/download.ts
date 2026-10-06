@@ -1,11 +1,13 @@
 import i18n from '../i18n';
 import { appleRequest } from './request';
+import { fetchBag } from './bag';
 import { buildPlist, parsePlist } from './plist';
 import { extractAndMergeCookies } from './cookies';
 import { getLatestVersionId } from './latestVersion';
 import {
   RETRYABLE_FAILURE_TYPE,
   redownloadEndpoint,
+  updateEndpoint,
   volumeStoreEndpoint,
 } from './config';
 import type { Account, Software, DownloadOutput, Sinf } from '../types';
@@ -31,8 +33,21 @@ export async function getDownloadInfo(
   let requestHost = endpoint.host;
   let requestPath = endpoint.path;
   let triedRedownload = false;
+  let triedUpdate = false;
   let cookies = [...account.cookies];
   let redirectAttempt = 0;
+
+  async function tryUpdate(): Promise<boolean> {
+    if (!triedRedownload || triedUpdate || !externalVersionId) return false;
+    const bag = await fetchBag(deviceId);
+    if (!bag.updateURL) return false;
+    endpoint = updateEndpoint(deviceId, bag.updateURL);
+    requestHost = endpoint.host;
+    requestPath = endpoint.path;
+    triedUpdate = true;
+    redirectAttempt = 0;
+    return true;
+  }
 
   while (redirectAttempt <= 3) {
     const payload: Record<string, any> = {
@@ -80,6 +95,8 @@ export async function getDownloadInfo(
     const responseError = (message: string) => new DownloadError(
       `${message} (HTTP ${response.status}; ${requestHost}${requestPath.split('?')[0]})`,
     );
+    // Apple 的重下载接口可能返回空 HTTP 500；只对这一已知情况尝试 bag 的更新接口。
+    if (response.status === 500 && !response.body.trim() && await tryUpdate()) continue;
     if (response.status !== 200) {
       throw responseError(i18n.t('errors.download.downloadFailed', { failureType: response.status }));
     }
@@ -98,6 +115,7 @@ export async function getDownloadInfo(
     const empty = !songList || songList.length === 0;
     const unavailable = customerMessage.toLowerCase() === 'no longer available' ||
       customerMessage.toLowerCase().endsWith(' no longer available');
+    if (!failureType && empty && unavailable && await tryUpdate()) continue;
 
     // Apple 会静默返回空 songList；与 5002 一样，仅切换一次重下载端点。
     if (!triedRedownload && (failureType === RETRYABLE_FAILURE_TYPE ||
@@ -155,6 +173,11 @@ export async function getDownloadInfo(
     const metadata = item.metadata as Record<string, any>;
     if (!metadata) {
       throw new DownloadError(i18n.t('errors.download.missingMetadata'));
+    }
+    if (triedUpdate && (songList.length !== 1 || String(metadata.itemId) !== String(app.id) ||
+      String(metadata.softwareVersionExternalIdentifier) !== externalVersionId ||
+      metadata.softwareVersionBundleId !== app.bundleID)) {
+      throw responseError(i18n.t('errors.download.noItems'));
     }
 
     const version = metadata.bundleShortVersionString as string;
